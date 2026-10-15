@@ -52,16 +52,56 @@ test.describe("searching", () => {
     });
 
     await page.goto("/");
-    const input = page.getByRole("searchbox");
 
-    await input.fill("h");
-    await input.fill("ha");
-    await input.fill("har");
+    // Atomic keystroke rounds: all three values land in ONE JS task, so the
+    // single-call assertion can never flake from scheduling gaps between
+    // separate fill() calls (>400 ms debounce). Pre-hydration rounds are
+    // swallowed by React, so rounds repeat — but each round is spaced WIDER
+    // than the 400 ms debounce (dispatch → wait → check): dispatching again
+    // inside the debounce window would perpetually reset its timer and the
+    // search would never fire. Identical final values + the app's in-flight
+    // dedupe guarantee exactly one action call total.
+    await expect
+      .poll(
+        async () => {
+          await page.evaluate(() => {
+            const input = document.querySelector(
+              'input[type="search"]',
+            ) as HTMLInputElement;
+            const setValue = Object.getOwnPropertyDescriptor(
+              HTMLInputElement.prototype,
+              "value",
+            )?.set;
+            for (const value of ["h", "ha", "har"]) {
+              setValue?.call(input, value);
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          });
+          await page.waitForTimeout(800);
+          return page.getByText("12 results for “har”").isVisible();
+        },
+        {
+          timeout: 15_000,
+          intervals: [100],
+          message: "debounced search never rendered results",
+        },
+      )
+      .toBe(true);
 
-    await expect(page.getByText("12 results for “har”")).toBeVisible({
-      timeout: 5_000,
-    });
     expect(actionPosts).toBe(1);
+  });
+
+  test("the production image optimizer is live (serves a local image)", async ({
+    request,
+  }) => {
+    // Local srcs bypass remotePatterns, so this exercises the real optimizer
+    // pipeline hermetically — a stubbed route would mask a broken config.
+    const response = await request.get(
+      "/_next/image?url=%2Ffavicon.ico&w=384&q=75",
+    );
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("image/");
   });
 
   test("shows the loading skeleton while a slow search is in flight", async ({

@@ -18,11 +18,14 @@ export default defineConfig({
     baseURL: "http://localhost:3100",
     trace: "retain-on-failure",
   },
+  // Always start fresh servers: reusing an already-listening server could
+  // silently run the suite against a stale build — or against the REAL Open
+  // Library API if it was started without OPEN_LIBRARY_SEARCH_URL.
   webServer: [
     {
       command: "node e2e/mock-api.mjs",
       url: "http://localhost:3200/health",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
     },
     {
       command: "npm run build && npm run start",
@@ -31,7 +34,7 @@ export default defineConfig({
         PORT: "3100",
         OPEN_LIBRARY_SEARCH_URL: "http://localhost:3200/search.json",
       },
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 180_000,
     },
   ],
