@@ -25,7 +25,7 @@ Search millions of books by title, author, or topic and browse the results in a 
 ### Stretch goals
 
 - ✅ **Debounce** — custom `useDebounce` hook; one action call per typing pause (asserted in both test suites)
-- ✅ **Loading skeleton** — shimmer skeleton grid while searching, plus a full-page skeleton streamed on first load
+- ✅ **Loading skeleton** — shimmer skeleton grid while searching, plus a full-page skeleton streamed on first load, plus a shimmer skeleton sweeping over every cover while its image loads
 - ✅ **Bonus:** error state with retry, URL sync (`?q=`, shareable/reloadable), SSR of results, accessibility (persistent live region for status announcements, labels, reduced-motion support for the skeleton shimmer)
 
 ## Quick start
@@ -74,7 +74,7 @@ GET /?q=dune
              └─ <SearchExperience/>  (async Server)        dynamic read behind Suspense
                   ├─ await searchParams  → query
                   ├─ await connection()  → request-time only (no fetches during build)
-                  ├─ searchBooks(query)   → Open Library fetch + normalization
+                  ├─ searchBooks(query)   → cached Open Library fetch ("use cache") + normalization
                   └─ <SearchDirectory initialQuery initialResults initialError/>  (Client)
 
 Typing in <SearchDirectory>
@@ -91,7 +91,8 @@ Design decisions worth knowing:
 - **Why a Server Action instead of a client `fetch`?** The assignment focuses on asynchronous JavaScript; `next-safe-action` gives validated, fully-typed input (`zod`), a single normalized result type across the RSC boundary, and clean loading/error semantics via `useAction` — while the Open Library call itself never leaves the server (no CORS, no exposed API details).
 - **Race conditions:** `executeAsync` results are guarded by an "active query" ref, so a slow response can never overwrite a newer search.
 - **Streaming:** with `cacheComponents` enabled, the page paints a skeleton immediately and streams results in — plus `await connection()` ensures `next build` never makes network calls.
-- **Covers:** `next/image` with a strict `images.remotePatterns` allowlist for `covers.openlibrary.org`; every cover renders a tiny blurred placeholder (LQIP) until the real image loads, so cards are never blank; books without covers (or whose cover 404s at runtime) fall back to a styled placeholder.
+- **Covers:** `next/image` with a strict `images.remotePatterns` allowlist for `covers.openlibrary.org`; every cover renders a tiny blurred placeholder (LQIP) with an animated shimmer skeleton sweeping over it until the real image loads, so cards are never blank; books without covers (or whose cover 404s at runtime) fall back to a styled placeholder.
+- **Request/response caching:** the fetch pipeline is a Next.js `"use cache"` function (`cacheLife('hours')`, Cache Components model) keyed by the sanitized query — repeat searches are served from the framework cache without re-hitting Open Library (well under its anonymous rate limit), and the SSR path and the Server Action share the same cache entry. Errors are never cached, so retry always re-fetches.
 - **Configurability:** `OPEN_LIBRARY_SEARCH_URL` overrides the API endpoint (used by the hermetic E2E suite).
 
 ## Project structure
@@ -119,15 +120,15 @@ e2e/mock-api.mjs            # local stand-in for the Open Library API (port 3200
 lib/*.test.ts, components/*.test.tsx, hooks/*.test.tsx   # Vitest suites
 next.config.ts              # cacheComponents, partialPrefetching, images.remotePatterns
 playwright.config.ts        # E2E: prod build on 3100 + mock API on 3200
-vitest.config.mts, vitest.setup.ts   # jsdom test env + next/image stub
+vitest.config.mts, vitest.setup.ts   # jsdom test env + next/image & next/cache stubs
 biome.json, tsconfig.json   # lint/format + TS config
 ```
 
 ## Testing
 
-Two suites, both green (57 + 15 tests):
+Two suites, both green (60 + 15 tests):
 
-- **Vitest (57 tests)** — API client (URL building, query sanitization — Solr operator input that upstream answers with 422/500 is neutralized before the request, normalization, dedupe, missing fields, non-2xx/network failures, upstream timeout, malformed-response guard), SSR param parsing (default/empty/whitespace/array/oversized `?q=`), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search, in-flight dedupe, live-region announcements, cover fallbacks). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
+- **Vitest (60 tests)** — API client (URL building, query sanitization — Solr operator input that upstream answers with 422/500 is neutralized before the request, `"use cache"` wiring incl. the cache-life profile, normalization, dedupe, missing fields, non-2xx/network failures, upstream timeout, malformed-response guard), SSR param parsing (default/empty/whitespace/array/oversized `?q=`), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search, in-flight dedupe, live-region announcements, cover fallbacks, cover-load shimmer skeleton). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
 - **Playwright (15 tests)** — runs against a **production build** with `OPEN_LIBRARY_SEARCH_URL` pointed at a local mock (`e2e/mock-api.mjs`), so it's fully deterministic and offline. Covers the full flows above, the live image-optimizer pipeline, plus a **responsive matrix** (320/390/768/1100/1440 px) asserting no horizontal overflow, real first-row grid column counts, and that the search input always fits.
 
 ```bash

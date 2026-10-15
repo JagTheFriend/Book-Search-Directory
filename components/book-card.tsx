@@ -17,21 +17,28 @@ const COVER_BLUR_DATA_URL =
 /**
  * A single result card: cover image, title, authors, and release year.
  *
- * Handles real-world gaps gracefully — covers get a blurred placeholder while
- * loading, books without a cover get a styled placeholder, and covers that
- * 404 at runtime fall back to the same placeholder instead of a broken image.
+ * Handles real-world gaps gracefully — covers render a blurred placeholder
+ * plus an animated shimmer skeleton until the real image loads, books
+ * without a cover get a styled placeholder, and covers that 404 at runtime
+ * fall back to the same placeholder instead of a broken image.
  */
 export function BookCard({ book }: { book: Book }) {
   const [coverFailed, setCoverFailed] = useState(false);
+  const [coverLoaded, setCoverLoaded] = useState(false);
 
   /**
    * `onError` never fires when the cover 404s before React hydration attaches
    * its listener (a server-rendered `<img>` starts loading immediately), so
-   * also check at attach time whether the image is already broken.
+   * also check at attach time whether the image is already broken — or
+   * already *loaded* (from cache), in which case the `load` event has come
+   * and gone too and the skeleton must be dismissed right away.
    */
   const handleImageRef = (img: HTMLImageElement | null) => {
-    if (img?.complete && img.naturalWidth === 0) {
+    if (!img?.complete) return;
+    if (img.naturalWidth === 0) {
       setCoverFailed(true);
+    } else {
+      setCoverLoaded(true);
     }
   };
 
@@ -55,11 +62,26 @@ export function BookCard({ book }: { book: Book }) {
             blurDataURL={COVER_BLUR_DATA_URL}
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setCoverFailed(true)}
+            onLoad={() => setCoverLoaded(true)}
             ref={handleImageRef}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">
             <BookOpenIcon className="h-12 w-12 text-zinc-400 dark:text-zinc-500" />
+          </div>
+        )}
+
+        {/* Skeleton shimmer while the cover downloads: the sweep animates over
+            the blurred LQIP preview (transparent base via `.over-image`), so
+            the card signals "loading" without ever going blank. Rendered on
+            the server too (coverLoaded starts false), dismissed by onLoad or
+            the attach-time check for already-loaded images. */}
+        {book.coverUrl !== null && !coverFailed && !coverLoaded && (
+          <div className="absolute inset-0" aria-hidden="true">
+            <div
+              data-testid="cover-skeleton"
+              className="skeleton over-image h-full w-full"
+            />
           </div>
         )}
 

@@ -28,6 +28,17 @@ vi.mock("next/image", () => ({
 }));
 
 /**
+ * `next/cache` requires the Next.js server runtime (framework async context),
+ * but `lib/openlibrary.ts` calls `cacheLife()` inside its `"use cache"`
+ * search function — so tests replace it with no-op spies.
+ */
+vi.mock("next/cache", () => ({
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
+
+/**
  * jsdom never actually loads images, so by default every `<img>` reports
  * `complete === true` and `naturalWidth === 0` — which the book card's
  * attach-time check would treat as a permanently broken cover. Pretend images

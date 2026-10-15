@@ -1,3 +1,4 @@
+import { cacheLife } from "next/cache";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildSearchUrl,
@@ -11,6 +12,7 @@ import {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe("buildSearchUrl", () => {
@@ -193,6 +195,20 @@ describe("searchBooks", () => {
     await searchBooks("star wars: a new hope");
 
     expect(fetchMock.mock.calls[0]?.[0]).toContain("q=star+wars+a+new+hope");
+  });
+
+  it("caches upstream responses via Next.js “use cache” with an explicit lifetime", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ numFound: 0, docs: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("dune");
+
+    // The `hours` profile: fresh for 1 h (background revalidation), expires
+    // after 1 day — asserted so the caching wiring can't silently regress.
+    expect(vi.mocked(cacheLife)).toHaveBeenCalledWith("hours");
   });
 });
 

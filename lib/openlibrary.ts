@@ -8,6 +8,8 @@
  * repository name and the assignment's "free API" constraint.
  */
 
+import { cacheLife } from "next/cache";
+
 /**
  * Search endpoint (JSON). Overridable via `OPEN_LIBRARY_SEARCH_URL` for
  * tests / self-hosting.
@@ -185,6 +187,24 @@ export async function searchBooks(query: string): Promise<SearchResult> {
   // sanitized — degrades to an empty result instead of an upstream 422/500.
   const searchTerm = sanitizeQuery(query);
   if (searchTerm === "") return { books: [], totalFound: 0 };
+
+  return fetchSearchResults(searchTerm);
+}
+
+/**
+ * Fetch + normalize pipeline, wrapped in Next.js `"use cache"` (Cache
+ * Components model): the normalized response is cached **keyed by the
+ * sanitized query**, and the SSR path and the Server Action share the same
+ * entry — repeat searches (any user, same query) are served from the cache
+ * without re-hitting Open Library, which also keeps us well under its
+ * anonymous rate limit. The `hours` profile (stale 5 min → serve instantly
+ * and revalidate in the background every hour → expire after 1 day) suits a
+ * catalog that changes slowly. Thrown errors are never cached, so the
+ * error → retry flow always re-fetches.
+ */
+async function fetchSearchResults(searchTerm: string): Promise<SearchResult> {
+  "use cache";
+  cacheLife("hours");
 
   const response = await fetch(buildSearchUrl(searchTerm), {
     headers: { accept: "application/json" },

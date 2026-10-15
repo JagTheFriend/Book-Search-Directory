@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { SEARCH_FALLBACK_MESSAGE } from "@/lib/messages";
+import { SEARCH_FAILED_MESSAGE, SEARCH_FALLBACK_MESSAGE } from "@/lib/messages";
 import type { Book } from "@/lib/openlibrary";
 import { SearchDirectory } from "./search-directory";
 
@@ -201,8 +201,7 @@ describe("SearchDirectory", () => {
 
   it("maps action serverError results to the error state", async () => {
     executeAsyncMock.mockResolvedValue({
-      serverError:
-        "Couldn’t reach Open Library right now. Please try again in a moment.",
+      serverError: SEARCH_FAILED_MESSAGE,
     });
     render(
       <SearchDirectory
@@ -215,12 +214,7 @@ describe("SearchDirectory", () => {
     typeQuery(getSearchInput(), "dune");
 
     await waitFor(
-      () =>
-        expect(
-          screen.getByText(
-            "Couldn’t reach Open Library right now. Please try again in a moment.",
-          ),
-        ).toBeTruthy(),
+      () => expect(screen.getByText(SEARCH_FAILED_MESSAGE)).toBeTruthy(),
       { timeout: 2000 },
     );
   });

@@ -4,8 +4,9 @@
  * Kept in a plain module (not a `"use server"` file) because Server Action
  * files may only export async functions.
  */
-export const SEARCH_FAILED_MESSAGE =
-  "Couldn't reach Open Library right now. Please try again in a moment.";
+
+/** Upstream search failure — phrased as an empty result, not a technical error. */
+export const SEARCH_FAILED_MESSAGE = "Nothing was found.";
 
 export const SEARCH_INVALID_MESSAGE =
   "That search wasn't valid — try a shorter, simpler query.";

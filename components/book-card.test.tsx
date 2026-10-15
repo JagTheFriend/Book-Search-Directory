@@ -58,6 +58,34 @@ describe("BookCard", () => {
     }
   });
 
+  it("shows a shimmer skeleton while the cover is still loading, then removes it", () => {
+    // Simulate an image that has not finished loading yet (jsdom's default
+    // mock reports every image as complete).
+    const completeSpy = vi
+      .spyOn(HTMLImageElement.prototype, "complete", "get")
+      .mockReturnValue(false);
+
+    try {
+      render(<BookCard book={baseBook} />);
+
+      expect(screen.getByTestId("cover-skeleton")).toBeTruthy();
+
+      fireEvent.load(screen.getByAltText("Cover of Dune"));
+
+      expect(screen.queryByTestId("cover-skeleton")).toBeNull();
+    } finally {
+      completeSpy.mockRestore();
+    }
+  });
+
+  it("shows no skeleton when the cover was already loaded before hydration", () => {
+    // Default jsdom mock: complete + naturalWidth > 0 — the attach-time check
+    // must dismiss the skeleton so a cached cover never stays covered.
+    render(<BookCard book={baseBook} />);
+
+    expect(screen.queryByTestId("cover-skeleton")).toBeNull();
+  });
+
   it("shows “Year unknown” when Open Library has no publication year", () => {
     render(<BookCard book={{ ...baseBook, firstPublishYear: null }} />);
 

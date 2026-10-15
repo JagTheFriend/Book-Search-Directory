@@ -75,6 +75,20 @@ body {
   }
 }
 
+/* Shimmer over an image (cover still loading): keep the base transparent so
+   the blurred LQIP preview shows through while the highlight sweeps — an
+   opaque skeleton block would hide exactly the placeholder the card exists
+   to show. */
+.skeleton.over-image {
+  background-color: rgb(255 255 255 / 35%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .skeleton.over-image {
+    background-color: rgb(0 0 0 / 25%);
+  }
+}
+
 /* ---- Search input decorations ------------------------------------------ */
 
 /* No "×" anywhere in the search field: the app's own clear control was
