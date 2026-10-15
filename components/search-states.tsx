@@ -66,7 +66,7 @@ export function EmptyState({
   onPickQuery,
 }: SuggestionChipsProps & { query: string }) {
   return (
-    <output
+    <div
       className={`${STATE_CARD_CLASS} border-zinc-300 bg-white/60 dark:border-zinc-700 dark:bg-zinc-900/60`}
     >
       <span
@@ -88,7 +88,7 @@ export function EmptyState({
         </p>
       </div>
       <SuggestionChips onPickQuery={onPickQuery} />
-    </output>
+    </div>
   );
 }
 
@@ -130,7 +130,7 @@ export function ErrorState({
   );
 }
 
-/** Announced result count above the grid. */
+/** Result count above the grid (announced via SearchDirectory’s live region). */
 export function ResultsMeta({
   query,
   count,
@@ -146,8 +146,6 @@ export function ResultsMeta({
       : `${count} result${count === 1 ? "" : "s"} for “${query}”`;
 
   return (
-    <output className="block text-sm text-zinc-500 dark:text-zinc-400">
-      {label}
-    </output>
+    <p className="block text-sm text-zinc-500 dark:text-zinc-400">{label}</p>
   );
 }

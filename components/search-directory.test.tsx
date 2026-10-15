@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SEARCH_FALLBACK_MESSAGE } from "@/lib/messages";
 import type { Book } from "@/lib/openlibrary";
 import { SearchDirectory } from "./search-directory";
 
@@ -163,10 +164,10 @@ describe("SearchDirectory", () => {
   });
 
   it("surfaces upstream failures and recovers via retry", async () => {
+    // Raw error details stay in the logs — the UI shows the friendly fallback.
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     executeAsyncMock
-      .mockRejectedValueOnce(
-        new Error("Couldn’t reach Open Library right now."),
-      )
+      .mockRejectedValueOnce(new Error("Raw upstream failure details."))
       .mockResolvedValueOnce(successResult(1));
     render(
       <SearchDirectory
@@ -182,9 +183,13 @@ describe("SearchDirectory", () => {
       timeout: 2000,
     });
     expect(screen.getByText("Search failed")).toBeTruthy();
-    expect(
-      screen.getByText("Couldn’t reach Open Library right now."),
-    ).toBeTruthy();
+    expect(screen.getByText(SEARCH_FALLBACK_MESSAGE)).toBeTruthy();
+    expect(screen.queryByText("Raw upstream failure details.")).toBeNull();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[search-directory] search failed:",
+      expect.any(Error),
+    );
+    consoleSpy.mockRestore();
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -246,8 +251,10 @@ describe("SearchDirectory", () => {
 
     typeQuery(getSearchInput(), "harry potter");
 
-    await waitFor(() =>
-      expect(replaceSpy).toHaveBeenCalledWith(null, "", "/?q=harry%20potter"),
+    await waitFor(
+      () =>
+        expect(replaceSpy).toHaveBeenCalledWith(null, "", "/?q=harry%20potter"),
+      { timeout: 2000 },
     );
   });
 
@@ -299,5 +306,122 @@ describe("SearchDirectory", () => {
     await waitFor(() => expect(screen.getByText("Book 1")).toBeTruthy(), {
       timeout: 2000,
     });
+  });
+
+  it("ignores a duplicate suggestion chip click while the first search is in flight", async () => {
+    let resolveSearch!: (value: unknown) => void;
+    executeAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+    render(
+      <SearchDirectory
+        initialQuery=""
+        initialResults={null}
+        initialError={null}
+      />,
+    );
+
+    const chip = screen.getByRole("button", { name: "Dune" });
+    fireEvent.click(chip);
+    fireEvent.click(chip);
+
+    expect(executeAsyncMock).toHaveBeenCalledTimes(1);
+    expect(executeAsyncMock).toHaveBeenCalledWith({ q: "dune frank herbert" });
+
+    await act(async () => {
+      resolveSearch(successResult());
+    });
+    expect(screen.getByText("Book 1")).toBeTruthy();
+  });
+
+  it("ignores a duplicate Enter submit while the first search is in flight", async () => {
+    let resolveSearch!: (value: unknown) => void;
+    executeAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+    render(
+      <SearchDirectory
+        initialQuery=""
+        initialResults={null}
+        initialError={null}
+      />,
+    );
+
+    typeQuery(getSearchInput(), "dune");
+    const form = getSearchInput().closest("form") as HTMLFormElement;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(executeAsyncMock).toHaveBeenCalledTimes(1);
+    expect(executeAsyncMock).toHaveBeenCalledWith({ q: "dune" });
+
+    await act(async () => {
+      resolveSearch(successResult());
+    });
+    expect(screen.getByText("Book 1")).toBeTruthy();
+  });
+
+  it("announces status changes through one persistent polite live region", async () => {
+    let resolveSearch!: (value: unknown) => void;
+    executeAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+    render(
+      <SearchDirectory
+        initialQuery=""
+        initialResults={null}
+        initialError={null}
+      />,
+    );
+
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("");
+
+    typeQuery(getSearchInput(), "dune");
+
+    await waitFor(() => expect(status.textContent).toBe("Searching…"), {
+      timeout: 2000,
+    });
+
+    await act(async () => {
+      resolveSearch(successResult());
+    });
+    // successResult reports totalFound: 42.
+    expect(status.textContent).toBe("42 results");
+  });
+
+  it("retries the current input value instead of the stale errored query", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    executeAsyncMock
+      .mockRejectedValueOnce(new Error("Raw upstream failure details."))
+      .mockResolvedValueOnce(successResult());
+    render(
+      <SearchDirectory
+        initialQuery=""
+        initialResults={null}
+        initialError={null}
+      />,
+    );
+
+    typeQuery(getSearchInput(), "old query");
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy(), {
+      timeout: 2000,
+    });
+
+    // Not yet debounced — retry must still search what the input says now.
+    typeQuery(getSearchInput(), "new query");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(
+      () => expect(executeAsyncMock).toHaveBeenCalledWith({ q: "new query" }),
+      { timeout: 2000 },
+    );
+    consoleSpy.mockRestore();
   });
 });

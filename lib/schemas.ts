@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Maximum query length — shared with the search input's `maxLength`. */
+export const MAX_QUERY_LENGTH = 120;
+
 /**
  * Input contract for book searches.
  *
@@ -11,7 +14,10 @@ export const searchQuerySchema = z.object({
     .string()
     .trim()
     .min(1, "Enter something to search for.")
-    .max(200, "That search is too long — keep it under 200 characters."),
+    .max(
+      MAX_QUERY_LENGTH,
+      `That search is too long — keep it under ${MAX_QUERY_LENGTH} characters.`,
+    ),
 });
 
 /** What the client sends (untrusted). */

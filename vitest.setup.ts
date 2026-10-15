@@ -26,3 +26,19 @@ vi.mock("next/image", () => ({
     );
   },
 }));
+
+/**
+ * jsdom never actually loads images, so by default every `<img>` reports
+ * `complete === true` and `naturalWidth === 0` — which the book card's
+ * attach-time check would treat as a permanently broken cover. Pretend images
+ * load successfully so only explicit `error` events trigger the fallback;
+ * individual tests can spy these getters to simulate a pre-hydration 404.
+ */
+Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", {
+  configurable: true,
+  get: () => 100,
+});
+Object.defineProperty(HTMLImageElement.prototype, "complete", {
+  configurable: true,
+  get: () => true,
+});

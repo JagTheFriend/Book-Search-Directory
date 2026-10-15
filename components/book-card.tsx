@@ -15,6 +15,17 @@ import { BookOpenIcon } from "./icons";
 export function BookCard({ book }: { book: Book }) {
   const [coverFailed, setCoverFailed] = useState(false);
 
+  /**
+   * `onError` never fires when the cover 404s before React hydration attaches
+   * its listener (a server-rendered `<img>` starts loading immediately), so
+   * also check at attach time whether the image is already broken.
+   */
+  const handleImageRef = (img: HTMLImageElement | null) => {
+    if (img?.complete && img.naturalWidth === 0) {
+      setCoverFailed(true);
+    }
+  };
+
   const authorLabel =
     book.authors.length === 0
       ? "Unknown author"
@@ -33,6 +44,7 @@ export function BookCard({ book }: { book: Book }) {
             sizes="(min-width: 1280px) 18vw, (min-width: 1024px) 23vw, (min-width: 640px) 31vw, 45vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setCoverFailed(true)}
+            ref={handleImageRef}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">

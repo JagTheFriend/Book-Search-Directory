@@ -12,7 +12,7 @@ function BookCardSkeleton() {
   );
 }
 
-/** Decorative grid of card skeletons (announce loading with an adjacent `role="status"` element). */
+/** Decorative grid of card skeletons (loading is announced by SearchDirectory’s live region). */
 export function SkeletonGrid({ count = 10 }: { count?: number }) {
   return (
     <div className={RESULTS_GRID_CLASS} aria-hidden="true">
@@ -24,13 +24,13 @@ export function SkeletonGrid({ count = 10 }: { count?: number }) {
   );
 }
 
-/** Visible + announced loading line shown while the server action runs. */
+/** Visible loading line shown while the server action runs (announced via SearchDirectory’s live region). */
 export function SearchingLine({ query }: { query: string }) {
   return (
-    <output className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+    <p className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
       <SpinnerIcon className="h-4 w-4 animate-spin" />
       Searching for “{query}”…
-    </output>
+    </p>
   );
 }
 

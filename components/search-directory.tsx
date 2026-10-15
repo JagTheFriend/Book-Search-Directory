@@ -15,6 +15,7 @@ import {
   SEARCH_INVALID_MESSAGE,
 } from "@/lib/messages";
 import type { Book } from "@/lib/openlibrary";
+import { MAX_QUERY_LENGTH } from "@/lib/schemas";
 import { ClearIcon, SearchIcon } from "./icons";
 import { ResultsGrid } from "./results-grid";
 import {
@@ -77,6 +78,12 @@ export function SearchDirectory(props: Props) {
   /** Query whose request/result currently owns the UI — stale responses are dropped. */
   const activeQueryRef = useRef(props.initialQuery);
 
+  /** Whether a search is currently executing — dedupes rapid identical requests. */
+  const inFlightRef = useRef(false);
+
+  /** Keeps keyboard focus on the search input when transient controls unmount. */
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const runSearch = useCallback(
     async (rawQuery: string, options?: { force?: boolean }) => {
       const target = rawQuery.trim();
@@ -88,11 +95,19 @@ export function SearchDirectory(props: Props) {
         return;
       }
 
-      // Skip if this query already owns the UI (unless explicitly forced, e.g. retry).
-      if (target === activeQueryRef.current && options?.force !== true) return;
+      // Skip duplicate work: same-query re-entry is ignored while that query is
+      // in flight (or unless explicitly forced, e.g. Enter/retry); a different
+      // query always proceeds.
+      if (
+        target === activeQueryRef.current &&
+        (inFlightRef.current || options?.force !== true)
+      ) {
+        return;
+      }
 
       activeQueryRef.current = target;
       setState({ status: "loading", query: target });
+      inFlightRef.current = true;
 
       try {
         const result = await executeAsync({ q: target });
@@ -108,6 +123,9 @@ export function SearchDirectory(props: Props) {
             totalFound: result.data.totalFound,
           });
           syncUrl(target);
+          // The clicked chip / retry button unmounts on success — keep keyboard
+          // focus on the search input instead of dropping it to <body>.
+          inputRef.current?.focus({ preventScroll: true });
         } else if (result.validationErrors !== undefined) {
           setState({
             status: "error",
@@ -123,11 +141,16 @@ export function SearchDirectory(props: Props) {
         }
       } catch (error) {
         if (activeQueryRef.current !== target) return;
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : SEARCH_FALLBACK_MESSAGE;
-        setState({ status: "error", query: target, message });
+        // Raw upstream errors stay in the logs; the UI only ever shows the
+        // friendly fallback message.
+        console.error("[search-directory] search failed:", error);
+        setState({
+          status: "error",
+          query: target,
+          message: SEARCH_FALLBACK_MESSAGE,
+        });
+      } finally {
+        inFlightRef.current = false;
       }
     },
     [executeAsync],
@@ -154,10 +177,25 @@ export function SearchDirectory(props: Props) {
   };
 
   const handleRetry = () => {
-    void runSearch(state.status === "error" ? state.query : query, {
-      force: true,
-    });
+    if (state.status !== "error") return;
+    // Retry the CURRENT input value (the errored query can be up to one
+    // debounce window stale), falling back to the errored query if cleared.
+    const target = query.trim() !== "" ? query : state.query;
+    void runSearch(target, { force: true });
   };
+
+  // One persistent, always-mounted polite live region announces status changes
+  // (mounted together with their content, live regions are announced
+  // unreliably by assistive tech). Announcements are intentionally distinct
+  // from the visible texts so text queries never become ambiguous. Errors are
+  // announced assertively by the error block’s role="alert" instead.
+  let statusAnnouncement = "";
+  if (state.status === "loading") {
+    statusAnnouncement = "Searching…";
+  } else if (state.status === "success") {
+    statusAnnouncement =
+      state.books.length === 0 ? "No results" : `${state.totalFound} results`;
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
@@ -188,16 +226,17 @@ export function SearchDirectory(props: Props) {
           <SearchIcon className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-zinc-400" />
           <input
             id="book-search"
+            ref={inputRef}
             type="search"
             name="q"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by title, author, or topic…"
-            maxLength={120}
+            maxLength={MAX_QUERY_LENGTH}
             autoComplete="off"
             spellCheck={false}
             enterKeyHint="search"
-            className="h-14 w-full rounded-xl border border-zinc-300 bg-white pr-12 pl-12 text-base text-zinc-900 shadow-sm outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 sm:pr-36 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20"
+            className="h-14 w-full appearance-none rounded-xl border border-zinc-300 bg-white pr-12 pl-12 text-base text-zinc-900 shadow-sm outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 sm:pr-36 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20"
           />
 
           <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-2">
@@ -211,9 +250,11 @@ export function SearchDirectory(props: Props) {
                 <ClearIcon className="h-4 w-4" />
               </button>
             )}
+            {/* sr-only on mobile (still focusable/activatable for keyboard, AT,
+                and mobile-keyboard Go), visible + styled from sm up. */}
             <button
               type="submit"
-              className="hidden rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:outline-none sm:inline-flex dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:ring-zinc-400 dark:focus-visible:ring-offset-zinc-900"
+              className="sr-only rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:outline-none sm:not-sr-only sm:inline-flex dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:ring-zinc-400 dark:focus-visible:ring-offset-zinc-900"
             >
               Search
             </button>
@@ -221,7 +262,13 @@ export function SearchDirectory(props: Props) {
         </form>
       </search>
 
-      {/* One announced region per state (role="status" / role="alert" on each state). */}
+      {/* The single persistent polite live region described above; the visible
+          state blocks carry no live-region semantics of their own. `<output>`
+          already implies role="status" (aria-live="polite" kept explicit). */}
+      <output aria-live="polite" className="sr-only">
+        {statusAnnouncement}
+      </output>
+
       <section
         className="flex flex-col gap-6"
         aria-busy={state.status === "loading"}

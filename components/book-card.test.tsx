@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BookCard } from "./book-card";
 
 const baseBook = {
@@ -35,6 +35,27 @@ describe("BookCard", () => {
     fireEvent.error(screen.getByAltText("Cover of Dune"));
 
     expect(screen.queryByAltText("Cover of Dune")).toBeNull();
+  });
+
+  it("swaps to the placeholder when the cover 404s before hydration", () => {
+    // Simulate an image that finished loading before React attached its error
+    // listener (so onError never fired) and came back broken.
+    const naturalWidthSpy = vi
+      .spyOn(HTMLImageElement.prototype, "naturalWidth", "get")
+      .mockReturnValue(0);
+    const completeSpy = vi
+      .spyOn(HTMLImageElement.prototype, "complete", "get")
+      .mockReturnValue(true);
+
+    try {
+      render(<BookCard book={baseBook} />);
+
+      expect(screen.queryByAltText("Cover of Dune")).toBeNull();
+      expect(screen.getByRole("heading", { name: "Dune" })).toBeTruthy();
+    } finally {
+      naturalWidthSpy.mockRestore();
+      completeSpy.mockRestore();
+    }
   });
 
   it("shows “Year unknown” when Open Library has no publication year", () => {
