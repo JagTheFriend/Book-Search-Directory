@@ -268,10 +268,18 @@ describe("SearchDirectory", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    // Clearing is done from the keyboard (there is no clear button): deleting
+    // every character flows through the debounce into the empty-query idle path.
+    typeQuery(getSearchInput(), "");
 
-    expect(screen.getByText("Find your next read")).toBeTruthy();
-    expect(replaceSpy).toHaveBeenCalledWith(null, "", "/?q=");
+    await waitFor(
+      () => expect(screen.getByText("Find your next read")).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    await waitFor(
+      () => expect(replaceSpy).toHaveBeenCalledWith(null, "", "/?q="),
+      { timeout: 2000 },
+    );
   });
 
   it("submits immediately on Enter without waiting for the debounce", async () => {

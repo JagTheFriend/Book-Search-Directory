@@ -16,7 +16,7 @@ import {
 } from "@/lib/messages";
 import type { Book } from "@/lib/openlibrary";
 import { MAX_QUERY_LENGTH } from "@/lib/schemas";
-import { ClearIcon, SearchIcon } from "./icons";
+import { SearchIcon } from "./icons";
 import { ResultsGrid } from "./results-grid";
 import {
   EmptyState,
@@ -166,11 +166,6 @@ export function SearchDirectory(props: Props) {
     void runSearch(query, { force: true });
   };
 
-  const handleClear = () => {
-    setQuery("");
-    void runSearch("");
-  };
-
   const handlePickQuery = (nextQuery: string) => {
     setQuery(nextQuery);
     void runSearch(nextQuery, { force: true });
@@ -236,23 +231,12 @@ export function SearchDirectory(props: Props) {
             autoComplete="off"
             spellCheck={false}
             enterKeyHint="search"
-            className="h-14 w-full appearance-none rounded-xl border border-zinc-300 bg-white pr-36 pl-12 text-base text-zinc-900 shadow-sm outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20"
+            className="h-14 w-full appearance-none rounded-xl border border-zinc-300 bg-white pr-28 pl-12 text-base text-zinc-900 shadow-sm outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20"
           />
 
-          {/* Right-hand controls sit inside the field: clear (icon) + Search
-              (primary CTA). Always visible at every width — the input's
-              pr-36 reserves room so text never slides underneath. */}
-          <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1.5">
-            {query !== "" && (
-              <button
-                type="button"
-                onClick={handleClear}
-                aria-label="Clear search"
-                className="rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-              >
-                <ClearIcon className="h-4 w-4" />
-              </button>
-            )}
+          {/* The Search CTA sits inside the field, always visible — the
+              input's pr-28 reserves room so text never slides underneath. */}
+          <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center">
             <button
               type="submit"
               className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:outline-none dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:ring-zinc-400 dark:focus-visible:ring-offset-zinc-900"

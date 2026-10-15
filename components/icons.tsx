@@ -36,15 +36,6 @@ export function SearchIcon({ className }: IconProps) {
   );
 }
 
-export function ClearIcon({ className }: IconProps) {
-  return (
-    <Svg className={className}>
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </Svg>
-  );
-}
-
 export function BookOpenIcon({ className }: IconProps) {
   return (
     <Svg className={className}>

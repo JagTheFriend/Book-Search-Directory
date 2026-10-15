@@ -165,10 +165,14 @@ test.describe("searching", () => {
 
   test("clearing the input returns to the idle state", async ({ page }) => {
     await page.goto("/?q=some%20title");
-    await page.getByRole("button", { name: "Clear search" }).click();
+    // No clear button exists — clearing happens from the keyboard.
+    await page.getByRole("searchbox").fill("");
 
-    await expect(page.getByText("Find your next read")).toBeVisible();
+    await expect(page.getByText("Find your next read")).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(page.getByRole("searchbox")).toHaveValue("");
+    await expect(page).toHaveURL(/\?q=$/);
   });
 
   test("picking a suggestion chip searches immediately", async ({ page }) => {
