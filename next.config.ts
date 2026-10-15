@@ -13,6 +13,17 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  images: {
+    // Book covers come from the Open Library cover service (Next 16 requires
+    // the strict `remotePatterns` allowlist; `images.domains` is deprecated).
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "covers.openlibrary.org",
+        pathname: "/b/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
