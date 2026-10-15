@@ -4,7 +4,7 @@ A responsive book search app built for **Assignment #3 (Movie or Book Search Dir
 
 Search millions of books by title, author, or topic and browse the results in a responsive CSS Grid of cards with cover, title, authors, and release year.
 
-**Tech stack:** Next.js 16 (App Router, Cache Components, Partial Prerendering) · React 19 · TypeScript · Tailwind CSS 4 · [next-safe-action](https://next-safe-action.dev) 8 + Zod 4 (typed Server Actions) · Vitest · Playwright · Biome
+**Tech stack:** Next.js 16 (App Router, `cacheComponents` + `partialPrefetching`) · React 19 · TypeScript · Tailwind CSS 4 · [next-safe-action](https://next-safe-action.dev) 8 + Zod 4 (typed Server Actions) · Vitest · Playwright · Biome
 
 **Live data source:** [Open Library Search API](https://openlibrary.org/dev/docs/api/search) — free, no key, CORS-friendly.
 
@@ -26,16 +26,30 @@ Search millions of books by title, author, or topic and browse the results in a 
 
 - ✅ **Debounce** — custom `useDebounce` hook; one action call per typing pause (asserted in both test suites)
 - ✅ **Loading skeleton** — shimmer skeleton grid while searching, plus a full-page skeleton streamed on first load
-- ✅ **Bonus:** error state with retry, URL sync (`?q=`, shareable/reloadable), SSR of results, accessibility (live regions, labels, reduced-motion support)
+- ✅ **Bonus:** error state with retry, URL sync (`?q=`, shareable/reloadable), SSR of results, accessibility (persistent live region for status announcements, labels, reduced-motion support for the skeleton shimmer)
 
 ## Quick start
 
-Requires **Node.js ≥ 20.9** (tested on Node 26).
+Requires **Node.js ≥ 20.9** (the floor set by Next.js 16; tested on Node 26 — also enforced via `engines` in `package.json`).
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+npm run dev        # http://localhost:3000 (see “Running locally & ports”)
 ```
+
+### Running locally & ports
+
+| Process | Port | Set by |
+| --- | --- | --- |
+| `npm run dev` | 3000 | `next dev` default (`-p`/`--port` or `PORT` override) |
+| `npm start` | 3000 | `next start` default (same overrides) |
+| Playwright app under test | 3100 | `playwright.config.ts` |
+| Playwright mock Open Library API | 3200 | `e2e/mock-api.mjs` |
+
+- The E2E suite uses 3100/3200 so `npm run test:e2e` can run while a dev server holds 3000.
+- If 3000 is busy, plain `npm run dev` does not fail — Next logs *"Port 3000 is in use by process \<pid\>, using available port 3001 instead."* and retries up to +10. An explicit `--port`/`PORT` disables retries (hard `EADDRINUSE` exit), and `npm start` never retries.
+- Custom port: `npm run dev -- -p 3100` (or `PORT=3101 npm run dev`); `npm run build && npm start -- -p 3200` (or `PORT=3200 npm start`).
+- `test:e2e` always builds and starts **fresh** servers on 3100/3200 (no reuse — a stale server could silently run the suite against the real API) and shuts them down when it finishes.
 
 Other scripts:
 
@@ -44,7 +58,8 @@ Other scripts:
 | `npm run dev` | Dev server (Turbopack) |
 | `npm run build` / `npm start` | Production build / serve |
 | `npm test` | Vitest unit + component tests (jsdom) |
-| `npm run test:e2e` | Playwright end-to-end suite (builds + starts a prod server itself) |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run test:e2e` | Playwright end-to-end suite (builds + starts prod + mock API itself) |
 | `npm run typecheck` | Route typegen + `tsc --noEmit` |
 | `npm run lint` / `npm run format` | Biome checks / formatter |
 
@@ -60,7 +75,7 @@ GET /?q=dune
                   ├─ await searchParams  → query
                   ├─ await connection()  → request-time only (no fetches during build)
                   ├─ searchBooks(query)   → Open Library fetch + normalization
-                  └─ <SearchDirectory initialQuery initialResults/>  (Client)
+                  └─ <SearchDirectory initialQuery initialResults initialError/>  (Client)
 
 Typing in <SearchDirectory>
    └─ useDebounce(400ms) → useAction(searchBooksAction).executeAsync({ q })
@@ -86,6 +101,7 @@ app/
   actions/search-books.ts   # "use server" — validated search Server Action
   page.tsx                  # sync page → <Suspense> + streaming boundary
   layout.tsx, globals.css   # metadata, fonts, skeleton shimmer keyframes
+  favicon.ico
 components/
   search-experience.tsx     # async Server Component: ?q= → fetch → hydrate shell
   search-directory.tsx      # client shell: debounce, action call, state machine
@@ -99,20 +115,27 @@ lib/
   openlibrary.ts            # typed API client: URL building + safe normalization
   safe-action.ts, schemas.ts, messages.ts
 e2e/                        # Playwright suite + deterministic mock API
+e2e/mock-api.mjs            # local stand-in for the Open Library API (port 3200)
 lib/*.test.ts, components/*.test.tsx, hooks/*.test.tsx   # Vitest suites
+next.config.ts              # cacheComponents, partialPrefetching, images.remotePatterns
+playwright.config.ts        # E2E: prod build on 3100 + mock API on 3200
+vitest.config.mts, vitest.setup.ts   # jsdom test env + next/image stub
+biome.json, tsconfig.json   # lint/format + TS config
 ```
 
 ## Testing
 
-Two suites, both green at the time of writing:
+Two suites, both green (53 + 15 tests):
 
-- **Vitest (38 tests)** — API client (URL building, normalization, dedupe, missing fields, non-2xx/network failures), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
-- **Playwright (14 tests)** — runs against a **production build** with `OPEN_LIBRARY_SEARCH_URL` pointed at a local mock (`e2e/mock-api.mjs`), so it's fully deterministic and offline. Covers the full flows above plus a **responsive matrix** (320/390/768/1100/1440 px) asserting no horizontal overflow, real first-row grid column counts, and that the search input always fits.
+- **Vitest (53 tests)** — API client (URL building, normalization, dedupe, missing fields, non-2xx/network failures, upstream timeout, malformed-response guard), SSR param parsing (default/empty/whitespace/array/oversized `?q=`), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search, in-flight dedupe, live-region announcements, cover fallbacks). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
+- **Playwright (15 tests)** — runs against a **production build** with `OPEN_LIBRARY_SEARCH_URL` pointed at a local mock (`e2e/mock-api.mjs`), so it's fully deterministic and offline. Covers the full flows above, the live image-optimizer pipeline, plus a **responsive matrix** (320/390/768/1100/1440 px) asserting no horizontal overflow, real first-row grid column counts, and that the search input always fits.
 
 ```bash
 npm test          # unit + component
-npm run test:e2e  # end-to-end (auto build + start + mock API, auto-shutdown)
+npm run test:e2e  # end-to-end (auto build + start + mock API on 3100/3200, auto-shutdown)
 ```
+
+> First E2E run only: `npx playwright install chromium` (the suite uses the default Chromium project).
 
 I also smoke-tested the production server against the **live** API: SSR results, the empty state, and the image optimizer all verified, then shut the server down.
 
@@ -148,13 +171,14 @@ netlify deploy --build --prod
 3. **Prerender-time fetches** — the default-query fetch originally attempted (and rejected with `HANGING_PROMISE_REJECTION`) during `next build`. `await connection()` in the async server component defers all fetching to request time: clean builds, no network calls while building.
 4. **`next-safe-action` masks server errors by default** — the default `handleServerError` returns a generic string. `returnServerError()` returns a friendly, expected error to the client while raw upstream errors stay in server logs.
 5. **Debounce + async race conditions** — out-of-order responses could show stale results; guarded with an "active query" ref that drops superseded responses.
-6. **Next 16 `next/image` changes** — `images.domains` is deprecated (→ `remotePatterns`) and cover URLs redirect through `archive.org` (within the 3-redirect limit); verified the optimizer serves real JPEGs.
+6. **Next 16 `next/image` changes** — `images.domains` is deprecated (→ `remotePatterns`) and cover URLs redirect through `archive.org` (within the 3-redirect limit); verified during manual smoke testing that the optimizer serves real JPEGs.
 7. **Flaky responsive assertion** — `getComputedStyle(el).gridTemplateColumns` sometimes returns the *specified* value (`repeat(3, minmax(0, 1fr))` → 3 tokens) instead of the resolved columns; switched to measuring actual card geometry (first-row card count). Also added a visibility wait for React's streaming "hidden reveal" container before measuring.
 8. **Dependency skew** — `vitest@5` requires `@types/node ≥ 22`; the scaffold had `^20` while the runtime is Node 26 → upgraded the types instead of forcing `--legacy-peer-deps`.
+9. **No timeout on the upstream fetch** — a code review pass caught that `searchBooks` could hang indefinitely: in SSR that stalls the whole stream (user stuck on the skeleton with an uninteractive page), and since Next.js serializes Server Actions per client, one hung request would queue every later search behind it. Fixed with `AbortSignal.timeout(8_000)`, plus an 8-second budget that turns a dead upstream into the normal error-and-retry state.
 
 ## API notes
 
 - Endpoint: `https://openlibrary.org/search.json?q=…&limit=24&fields=key,title,subtitle,author_name,first_publish_year,cover_i` (field-limited for small payloads).
 - Covers: `https://covers.openlibrary.org/b/id/{cover_i}-L.jpg`.
-- Open Library asks for reasonable use (~100 req/min); the debounce keeps us far below that.
+- Open Library asks for reasonable use (currently 1 request/second anonymous, 3 req/s with an identified User-Agent); the 400 ms debounce + 8 s request timeout keep us far below that, and the mock API keeps the test suites offline.
 - Missing fields are common (`cover_i`, `first_publish_year`, `author_name`) — the normalizer maps them to `null`/`[]` and the UI renders placeholders instead of breaking.
