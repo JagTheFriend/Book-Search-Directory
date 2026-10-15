@@ -116,6 +116,18 @@ describe("searchBooks", () => {
     expect(result.books[1].coverUrl).toBeNull();
   });
 
+  it("passes an AbortSignal so a hung upstream request cannot stall SSR", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ numFound: 0, docs: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("dune");
+
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("throws a status error on non-2xx responses", async () => {
     vi.stubGlobal(
       "fetch",
@@ -132,6 +144,20 @@ describe("searchBooks", () => {
     );
 
     await expect(searchBooks("dune")).rejects.toThrow("fetch failed");
+  });
+
+  it("rejects when the API reports matches but no doc normalizes to a book", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ numFound: 5, docs: [{}] }),
+      }),
+    );
+
+    await expect(searchBooks("dune")).rejects.toThrow(
+      "Open Library returned no usable books",
+    );
   });
 
   it("short-circuits blank queries without hitting the network", async () => {

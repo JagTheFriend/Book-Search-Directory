@@ -21,8 +21,20 @@ export const COVER_IMAGE_ENDPOINT = "https://covers.openlibrary.org/b/id";
 /** Query used when the URL has no `?q=` parameter, so the grid renders on first paint (SSR). */
 export const DEFAULT_QUERY = "harry potter";
 
-/** Page size. Divisible by 2/3/4/5 columns so every responsive breakpoint fills cleanly. */
+/**
+ * Page size. Divisible by 2/3/4 columns so those breakpoints fill cleanly;
+ * the 5-column layout simply ends with a partial last row (a multiple of 60
+ * would leave an awkward sparse grid at 24 results anyway).
+ */
 export const RESULTS_PER_QUERY = 24;
+
+/**
+ * Hard timeout for the upstream search request. A hung request would stall
+ * SSR streaming (user stares at the skeleton with no interactive input) and,
+ * since Next.js serializes Server Actions per client, queue every later
+ * search from that user behind it.
+ */
+const REQUEST_TIMEOUT_MS = 8_000;
 
 /**
  * Requesting only the fields we render keeps payloads small (~60% smaller
@@ -156,6 +168,9 @@ export async function searchBooks(query: string): Promise<SearchResult> {
 
   const response = await fetch(buildSearchUrl(trimmed), {
     headers: { accept: "application/json" },
+    // Bound the upstream request so a slow/hung API can't stall SSR
+    // streaming or block the per-client Server Action queue (see timeout doc).
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -166,10 +181,15 @@ export async function searchBooks(query: string): Promise<SearchResult> {
 
   const data = (await response.json()) as OpenLibraryResponse;
   const books = normalizeDocs(data.docs);
+  const totalFound =
+    typeof data.numFound === "number" ? data.numFound : books.length;
 
-  return {
-    books,
-    totalFound:
-      typeof data.numFound === "number" ? data.numFound : books.length,
-  };
+  // The API claims matches but every doc was normalized away (API drift or
+  // schema change) — throw so callers show an error, not a false
+  // "No results found" empty state.
+  if (totalFound > 0 && books.length === 0) {
+    throw new Error("Open Library returned no usable books");
+  }
+
+  return { books, totalFound };
 }
