@@ -6,11 +6,20 @@ import type { Book } from "@/lib/openlibrary";
 import { BookOpenIcon } from "./icons";
 
 /**
+ * LQIP placeholder shown behind covers while they load, so cards never look
+ * blank. A 20×20 diagonal zinc-200→zinc-400 gradient PNG (292 bytes),
+ * generated with sharp and matching the no-cover placeholder below —
+ * next/image scales + blurs it and fades the real cover in on top.
+ */
+const COVER_BLUR_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAMAAAC6V+0/AAAAdVBMVEXDw8m7u8LKys/Ly9HGxsy9vcTIyM3BwcfExMq/v8W6usDNzdK4uL+2tr3Pz9S0tLzR0dXS0tezs7rU1NmxsbjW1tqvr7etrbXY2NysrLTZ2d2qqrLb29/d3eGoqLDf3+Kmpq/g4OSlpa3i4uWjo6zk5Oehoaqi/zaTAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAVUlEQVQY023IWQJCAAAA0YksoSiyRUi6/xG7wLzPx7FvyzyN/bO+V7c8DOJzCnIJchfkIuROyGXIFchdkSuReyDXINci1yE3IPdC7o3citwHuS9yvz9/SBRBMxirGgAAAABJRU5ErkJggg==";
+
+/**
  * A single result card: cover image, title, authors, and release year.
  *
- * Handles real-world gaps gracefully — books without a cover get a styled
- * placeholder, and covers that 404 at runtime fall back to the same
- * placeholder instead of a broken image.
+ * Handles real-world gaps gracefully — covers get a blurred placeholder while
+ * loading, books without a cover get a styled placeholder, and covers that
+ * 404 at runtime fall back to the same placeholder instead of a broken image.
  */
 export function BookCard({ book }: { book: Book }) {
   const [coverFailed, setCoverFailed] = useState(false);
@@ -42,6 +51,8 @@ export function BookCard({ book }: { book: Book }) {
             alt={`Cover of ${book.title}`}
             fill
             sizes="(min-width: 1280px) 18vw, (min-width: 1024px) 23vw, (min-width: 640px) 31vw, 45vw"
+            placeholder="blur"
+            blurDataURL={COVER_BLUR_DATA_URL}
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setCoverFailed(true)}
             ref={handleImageRef}

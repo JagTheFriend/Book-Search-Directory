@@ -91,7 +91,7 @@ Design decisions worth knowing:
 - **Why a Server Action instead of a client `fetch`?** The assignment focuses on asynchronous JavaScript; `next-safe-action` gives validated, fully-typed input (`zod`), a single normalized result type across the RSC boundary, and clean loading/error semantics via `useAction` — while the Open Library call itself never leaves the server (no CORS, no exposed API details).
 - **Race conditions:** `executeAsync` results are guarded by an "active query" ref, so a slow response can never overwrite a newer search.
 - **Streaming:** with `cacheComponents` enabled, the page paints a skeleton immediately and streams results in — plus `await connection()` ensures `next build` never makes network calls.
-- **Covers:** `next/image` with a strict `images.remotePatterns` allowlist for `covers.openlibrary.org`; books without covers (or whose cover 404s at runtime) fall back to a styled placeholder.
+- **Covers:** `next/image` with a strict `images.remotePatterns` allowlist for `covers.openlibrary.org`; every cover renders a tiny blurred placeholder (LQIP) until the real image loads, so cards are never blank; books without covers (or whose cover 404s at runtime) fall back to a styled placeholder.
 - **Configurability:** `OPEN_LIBRARY_SEARCH_URL` overrides the API endpoint (used by the hermetic E2E suite).
 
 ## Project structure

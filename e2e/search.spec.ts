@@ -22,6 +22,11 @@ test.describe("SSR", () => {
     await expect(
       page.getByRole("heading", { name: "Mock Book 1: Volume 1" }),
     ).toBeVisible();
+
+    // Covers ship with LQIP blur placeholders in the server HTML, so cards
+    // are never blank while the real JPEGs load.
+    const ssrHtml = await (await page.request.get("/")).text();
+    expect(ssrHtml).toContain("data:image/png;base64,");
   });
 
   test("an explicit ?q= is respected; an empty ?q= shows the idle state", async ({
