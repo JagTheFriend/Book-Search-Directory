@@ -5,6 +5,7 @@ import {
   normalizeDoc,
   normalizeDocs,
   RESULTS_PER_QUERY,
+  sanitizeQuery,
   searchBooks,
 } from "./openlibrary";
 
@@ -169,6 +170,43 @@ describe("searchBooks", () => {
       totalFound: 0,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits operator-only queries without hitting the network (the API answers them with 422/500)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchBooks(": && -")).resolves.toEqual({
+      books: [],
+      totalFound: 0,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes operator characters out of the request URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ numFound: 0, docs: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("star wars: a new hope");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("q=star+wars+a+new+hope");
+  });
+});
+
+describe("sanitizeQuery", () => {
+  it("replaces Solr operator characters with spaces and collapses the gap", () => {
+    expect(sanitizeQuery("star wars: a new hope")).toBe("star wars a new hope");
+    expect(sanitizeQuery("harry-potter")).toBe("harry potter");
+    expect(sanitizeQuery("1984: a dystopia?!")).toBe("1984 a dystopia");
+    expect(sanitizeQuery(": && -")).toBe("");
+  });
+
+  it("keeps apostrophes and normal words intact", () => {
+    expect(sanitizeQuery("it's")).toBe("it's");
+    expect(sanitizeQuery("  The Hunger Games  ")).toBe("The Hunger Games");
   });
 });
 

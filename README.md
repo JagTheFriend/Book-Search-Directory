@@ -125,9 +125,9 @@ biome.json, tsconfig.json   # lint/format + TS config
 
 ## Testing
 
-Two suites, both green (53 + 15 tests):
+Two suites, both green (57 + 15 tests):
 
-- **Vitest (53 tests)** — API client (URL building, normalization, dedupe, missing fields, non-2xx/network failures, upstream timeout, malformed-response guard), SSR param parsing (default/empty/whitespace/array/oversized `?q=`), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search, in-flight dedupe, live-region announcements, cover fallbacks). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
+- **Vitest (57 tests)** — API client (URL building, query sanitization — Solr operator input that upstream answers with 422/500 is neutralized before the request, normalization, dedupe, missing fields, non-2xx/network failures, upstream timeout, malformed-response guard), SSR param parsing (default/empty/whitespace/array/oversized `?q=`), Zod schema bounds, `useDebounce` timing with fake timers, and component tests for every UI state (SSR-data reuse, debounce-coalescing, skeleton, no-results, error + retry, URL sync, clear/idle, Enter-to-search, in-flight dedupe, live-region announcements, cover fallbacks). Follows the [official Next.js Vitest guide](https://nextjs.org/docs/app/guides/testing/vitest).
 - **Playwright (15 tests)** — runs against a **production build** with `OPEN_LIBRARY_SEARCH_URL` pointed at a local mock (`e2e/mock-api.mjs`), so it's fully deterministic and offline. Covers the full flows above, the live image-optimizer pipeline, plus a **responsive matrix** (320/390/768/1100/1440 px) asserting no horizontal overflow, real first-row grid column counts, and that the search input always fits.
 
 ```bash

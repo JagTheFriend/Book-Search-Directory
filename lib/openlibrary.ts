@@ -156,6 +156,24 @@ export function normalizeDocs(
 }
 
 /**
+ * Characters Open Library's Solr backend treats as query operators. A query
+ * made only of these is rejected outright by the API (verified live:
+ * `":"`, `"&&"`, `""`, `"-"` → 422; `"***"` → 500), and stray operators can
+ * break the parser mid-query — so each is replaced with a space and the
+ * leftover whitespace is collapsed before the request goes out. Apostrophes
+ * are deliberately kept: the API accepts them (`"it's"` → 200).
+ */
+const SOLR_SPECIAL_CHARACTERS = /[+\-&|!(){}[\]^"~*?:\\/]/g;
+
+/** Makes user input safe for Open Library's Solr query parser. */
+export function sanitizeQuery(query: string): string {
+  return query
+    .replace(SOLR_SPECIAL_CHARACTERS, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Searches Open Library and returns normalized results.
  *
  * Throws an `Error` when the request fails (network error, non-2xx response,
@@ -163,10 +181,12 @@ export function normalizeDocs(
  * user-facing message, so raw upstream errors are never leaked to the client.
  */
 export async function searchBooks(query: string): Promise<SearchResult> {
-  const trimmed = query.trim();
-  if (trimmed === "") return { books: [], totalFound: 0 };
+  // Blank input — and input that is nothing but Solr operators once
+  // sanitized — degrades to an empty result instead of an upstream 422/500.
+  const searchTerm = sanitizeQuery(query);
+  if (searchTerm === "") return { books: [], totalFound: 0 };
 
-  const response = await fetch(buildSearchUrl(trimmed), {
+  const response = await fetch(buildSearchUrl(searchTerm), {
     headers: { accept: "application/json" },
     // Bound the upstream request so a slow/hung API can't stall SSR
     // streaming or block the per-client Server Action queue (see timeout doc).
@@ -175,7 +195,7 @@ export async function searchBooks(query: string): Promise<SearchResult> {
 
   if (!response.ok) {
     throw new Error(
-      `Open Library search failed with status ${response.status}`,
+      `Open Library search failed with status ${response.status} for q="${searchTerm}"`,
     );
   }
 
