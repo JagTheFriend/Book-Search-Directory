@@ -8,9 +8,12 @@
  * repository name and the assignment's "free API" constraint.
  */
 
-/** Search endpoint (JSON). */
+/**
+ * Search endpoint (JSON). Overridable via `OPEN_LIBRARY_SEARCH_URL` for
+ * tests / self-hosting.
+ */
 export const OPEN_LIBRARY_SEARCH_ENDPOINT =
-  "https://openlibrary.org/search.json";
+  process.env.OPEN_LIBRARY_SEARCH_URL ?? "https://openlibrary.org/search.json";
 
 /** Cover image host, e.g. `https://covers.openlibrary.org/b/id/8231856-M.jpg`. */
 export const COVER_IMAGE_ENDPOINT = "https://covers.openlibrary.org/b/id";

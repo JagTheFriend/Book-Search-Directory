@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { SEARCH_FAILED_MESSAGE } from "@/lib/messages";
 import {
   DEFAULT_QUERY,
@@ -39,6 +40,12 @@ export async function SearchExperience({ searchParams }: Props) {
 
   let initialResults: SearchResult | null = null;
   let initialError: string | null = null;
+
+  // Defer the upstream fetch to request time: the static shell (the streaming
+  // fallback) stays prerenderable and `next build` never makes network calls.
+  // Deliberately *outside* the try/catch — during prerendering this rejection
+  // is expected React control flow (the subtree is discarded), not a failure.
+  await connection();
 
   try {
     initialResults = await searchBooks(query);

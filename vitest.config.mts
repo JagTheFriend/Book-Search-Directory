@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // Unit/component tests only — Playwright owns the *.spec.ts E2E suite.
+    include: ["**/*.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
     // Component tests assert against debounced timing; keep runs deterministic.
     testTimeout: 10_000,
